@@ -36,7 +36,7 @@ func main() {
 		Short: "skylight is awesome",
 		Long:  `skylight is the best CLI ever!`,
 		Run: func(cmd *cobra.Command, args []string) {
-			skylight.Run()
+
 		},
 	}
 	flags := cmd.Flags()
@@ -96,6 +96,15 @@ func main() {
 		logger.Fatal().Msgf("failed to load config file: %s", err)
 	}
 
-	// TODO: write the rest of your app logic here
+	stateFilepath := k.String("general.statefile")
+	if stateFilepath == "" {
+		logger.Fatal().Msg("statefile is required")
+	}
 
+	// this run is non-blocking
+	skylight.Run(stateFilepath, k)
+
+	// wait forever
+	// TODO: add a signal handler to gracefully shutdown
+	select {}
 }
