@@ -2,107 +2,55 @@ package main
 
 import (
 	_ "embed"
-	"fmt"
+	"flag"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/knadh/koanf"
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/providers/rawbytes"
+	"github.com/hashicorp/hcl/v2/hclsimple"
 	skylight "github.com/mosajjal/skylight/pkg"
-	"github.com/rs/zerolog"
-
-	"github.com/spf13/cobra"
+	"github.com/phuslu/log"
 )
 
 var nocolorLog = strings.ToLower(os.Getenv("NO_COLOR")) == "true"
-var logger = zerolog.New(os.Stderr).With().Timestamp().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339, NoColor: nocolorLog})
+
+//go:embed config.hcl
+var defaultConfig []byte
 
 var (
-	version string = "UNKNOWN"
-	commit  string = "NOT_PROVIDED"
+	cfgFile          = flag.String("config", "", "path to the config file")
+	printDefaultConf = flag.Bool("defaultconfig", false, "write the default config to stdout")
 )
-
-//go:embed config.defaults.yaml
-var defaultConfig []byte
 
 func main() {
 
-	cmd := &cobra.Command{
-		Use:   "skylight",
-		Short: "skylight is awesome",
-		Long:  `skylight is the best CLI ever!`,
-		Run: func(cmd *cobra.Command, args []string) {
+	flag.Parse()
 
-		},
-	}
-	flags := cmd.Flags()
-
-	// define cli arguments
-	_ = flags.IntP("number", "n", 7, "What is the magic number?")
-	// make it required
-	_ = cmd.MarkFlagRequired("number")
-	logLevel := flags.StringP("loglevel", "v", "info", "log level (debug, info, warn, error, fatal, panic)")
-	config := flags.StringP("config", "c", "$HOME/.skylight.yaml", "path to YAML configuration file")
-	_ = flags.BoolP("defaultconfig", "d", false, "write default config to $HOME/.skylight.yaml")
-
-	if err := cmd.Execute(); err != nil {
-		logger.Error().Msgf("failed to execute command: %s", err)
-		return
+	var config skylight.Config
+	if err := hclsimple.DecodeFile(*cfgFile, nil, &config); err != nil {
+		log.Fatal().Msgf("Failed to load configuration: %s", err)
 	}
 
-	// set up log level
-	lvl, err := zerolog.ParseLevel(*logLevel)
-	if err != nil {
-		logger.Fatal().Msgf("failed to parse log level: %s", err)
-	}
-	zerolog.SetGlobalLevel(lvl)
-
-	if !flags.Changed("config") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			logger.Fatal().Msgf("failed to get user home directory: %s", err)
+	if log.IsTerminal(os.Stderr.Fd()) {
+		log.DefaultLogger = log.Logger{
+			TimeFormat: "15:04:05",
+			Caller:     1,
+			Level:      log.ParseLevel(config.LogLevel),
+			Writer: &log.ConsoleWriter{
+				ColorOutput:    true,
+				QuoteString:    true,
+				EndWithMessage: true,
+			},
 		}
-		*config = filepath.Join(home, ".skylight.yaml")
-	}
-	if flags.Changed("help") {
-		return
-	}
-	if flags.Changed("version") {
-		fmt.Printf("skylight version %s, commit %s\n", version, commit)
-		return
 	}
 
 	// load the default config
-	if flags.Changed("defaultconfig") {
-		err := os.WriteFile(*config, defaultConfig, 0644)
-		if err != nil {
-			logger.Fatal().Msgf("failed to write default config: %s", err)
-		}
-		logger.Info().Msgf("wrote default config to %s", *config)
-		return
-	}
-
-	k := koanf.New(".")
-	// load the defaults first, so if the config file is missing some values, we can fall back to the defaults
-	if err := k.Load(rawbytes.Provider(defaultConfig), yaml.Parser()); err != nil {
-		logger.Fatal().Msgf("failed to load default config: %s", err)
-	}
-
-	if err := k.Load(file.Provider(*config), yaml.Parser()); err != nil {
-		logger.Fatal().Msgf("failed to load config file: %s", err)
-	}
-
-	stateFilepath := k.String("general.statefile")
-	if stateFilepath == "" {
-		logger.Fatal().Msg("statefile is required")
+	if *printDefaultConf {
+		os.Stdout.Write(defaultConfig)
+		os.Exit(0)
 	}
 
 	// this run is non-blocking
-	skylight.Run(stateFilepath, k)
+	skylight.Run(config)
 
 	// wait forever
 	// TODO: add a signal handler to gracefully shutdown

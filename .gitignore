@@ -24,3 +24,6 @@ go.work.sum
 .env
 
 .terraform
+
+config.hcl
+state.json
