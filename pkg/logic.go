@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
-	"github.com/mmcdole/gofeed"
+	"github.com/SlyMarbo/rss"
 	"github.com/phuslu/log"
 )
 
@@ -17,66 +18,72 @@ var runtimeState struct {
 }
 
 type FeedNews struct {
-	*gofeed.Item
+	*rss.Item
 	FeedName string
 }
 
 // run this as a goroutine forever
 func HandleFeed(f *FeedConfig) {
-	// fetch the feed
-	fp := gofeed.NewParser()
-	feed, err := fp.ParseURL(f.Url)
-	if err != nil {
-		log.Error().Msgf("Error fetching feed %s: %s", f.Name, err)
-		return
+	log.Info().Msgf("Feed %s initiated", f.Name)
+	// fetch the feed. first create a http client with 10 second timeout
+	// TODO: move this inside the loop with ETAG and Last-Modified headers to make sure we don't over-fetch
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
 	}
 
-	var latestTimestamp time.Time
 	for {
-		// iterate over the items
-		for i, item := range feed.Items {
-
-			if item.PublishedParsed == nil {
-				log.Warn().Msgf("Item %s has no published date, trying to use feed's update date", item.Title)
-				// check the feed updated date instead
-				if feed.UpdatedParsed != nil {
-					item.PublishedParsed = feed.UpdatedParsed
-				} else {
-					log.Warn().Msgf("Feed %s has no updated date", f.Name)
-					continue
-				}
-			}
-
-			// if the item is published older than ignore_items_older_than hours, skip it
-			if f.IgnoreOlderThen != 0 {
-				// check to see if the feed has a published date
-				if time.Since(*item.PublishedParsed) > time.Duration(f.IgnoreOlderThen)*time.Hour {
-					continue
-				}
-			}
-
-			// check if the item is new
-			if f.Timestamp.Before(*item.PublishedParsed) {
-				// do something with the item
-				if i == 0 {
-					latestTimestamp = *item.PublishedParsed
-				}
-				//TODO: replace this with the logic or a MsgQ
-				fmt.Println(item.Title)
-				if err := SendToWebhook(f.WebhookURL, &FeedNews{item, f.Name}); err != nil {
-					log.Error().Msgf("Error sending to webhook: %s", err)
-				}
-			}
-			if i >= f.MaxItems {
-				break
-			}
+		fp, err := rss.FetchByClient(f.Url, httpClient)
+		if err != nil {
+			log.Error().Msgf("Error fetching feed %s: %s", f.Name, err)
 		}
-		// update the timestamp
-		log.Info().Msgf("Updating latest timestamp of feed %s to %s", f.Name, f.Timestamp)
-		if !latestTimestamp.IsZero() {
-			f.Timestamp = latestTimestamp
+		// iterate over the items
+		if fp != nil && err == nil {
+			log.Info().Msgf("Fetched feed %s with %d items", f.Name, len(fp.Items))
+			for i, item := range fp.Items {
+
+				// check and fix the item's published date so every item has a date
+				if item.Date.IsZero() {
+					log.Warn().Msgf("Item %s has no published date, skipping", item.Title)
+					// // check the feed updated date instead
+					// if fp.Refresh != time.Unix(0, 0) {
+					// 	item.Date = fp.Refresh
+					// } else {
+					// 	log.Warn().Msgf("Feed %s has no updated date", f.Name)
+					// 	continue
+					// }
+					continue
+				}
+
+				// if the item is published older than ignore_items_older_than hours, skip it
+				if f.IgnoreOlderThen != 0 {
+					// check to see if the feed has a published date
+					if time.Since(item.Date) > time.Duration(f.IgnoreOlderThen)*time.Hour {
+						continue
+					}
+				}
+
+				// check if the fetched feed item is newer than the latest timestamp recorded in the state
+				if f.Timestamp.Before(item.Date) {
+
+					fmt.Println(item.Title)
+					if err := SendToWebhook(f.WebhookURL, &FeedNews{item, f.Name}); err != nil {
+						log.Error().Msgf("Error sending to webhook: %s", err)
+					}
+					// update the timestamp
+					log.Info().Msgf("Updating latest timestamp of feed %s to %s", f.Name, f.Timestamp)
+					if !item.Date.IsZero() {
+						if item.Date.After(f.Timestamp) {
+							f.Timestamp = item.Date
+						}
+					}
+				}
+				if i >= f.MaxItems {
+					break
+				}
+			}
 		}
 		// wait for the refresh interval
+		log.Debug().Msgf("Waiting for %d seconds", f.Interval)
 		time.Sleep(time.Duration(f.Interval * uint(time.Second)))
 	}
 }
@@ -137,6 +144,7 @@ func Run(c Config) {
 		if _, ok := runtimeState.FeedsState[feed.Name]; !ok {
 			log.Debug().Msgf("Feed %s not found in state", feed.Name)
 			feedCfg := feed
+			// BUG: if the config changes, the state takes priority over the config, meaning the config becomes useless for that item.
 			runtimeState.FeedsState[feed.Name] = &feedCfg
 		}
 		go HandleFeed(runtimeState.FeedsState[feed.Name])

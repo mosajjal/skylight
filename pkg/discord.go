@@ -1,7 +1,6 @@
 package skylight
 
 import (
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -24,14 +23,12 @@ func itemToEmbed(item *FeedNews) *discordgo.MessageEmbed {
 		}
 	}
 
-	if item.Author != nil {
-		embed.Author = &discordgo.MessageEmbedAuthor{
-			Name: item.FeedName,
-		}
+	embed.Author = &discordgo.MessageEmbedAuthor{
+		Name: item.FeedName,
 	}
 
-	if item.PublishedParsed != nil {
-		embed.Timestamp = item.PublishedParsed.Format(time.RFC3339)
+	if item.Date != time.Unix(0, 0) {
+		embed.Timestamp = item.Date.Format(time.RFC3339)
 	}
 
 	return embed
@@ -76,8 +73,9 @@ func SendToWebhook(webhookURL string, item *FeedNews) error {
 	if err != nil {
 		return err
 	}
-	msgj, _ := json.Marshal(msg)
-	log.Info().Msgf("%s", msgj)
+	if msg != nil {
+		log.Info().Msgf("%v", msg)
+	}
 
 	return nil
 }
