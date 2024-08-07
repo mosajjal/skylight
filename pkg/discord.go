@@ -1,7 +1,6 @@
 package skylight
 
 import (
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -22,16 +21,22 @@ func itemToEmbed(item *FeedNews) *discordgo.MessageEmbed {
 		embed.Image = &discordgo.MessageEmbedImage{
 			URL: item.Image.URL,
 		}
+	} else {
+		log.Debug().Msgf("No image found for %s", item.Title)
 	}
 
 	if item.Author != nil {
 		embed.Author = &discordgo.MessageEmbedAuthor{
 			Name: item.FeedName,
 		}
+	} else {
+		log.Debug().Msgf("No author found for %s", item.Title)
 	}
 
 	if item.PublishedParsed != nil {
 		embed.Timestamp = item.PublishedParsed.Format(time.RFC3339)
+	} else {
+		log.Debug().Msgf("No published date found for %s", item.Title)
 	}
 
 	return embed
@@ -72,12 +77,10 @@ func SendToWebhook(webhookURL string, item *FeedNews) error {
 		return err
 	}
 
-	msg, err := session.WebhookExecute(id, token, false, &message)
+	_, err = session.WebhookExecute(id, token, false, &message)
 	if err != nil {
 		return err
 	}
-	msgj, _ := json.Marshal(msg)
-	log.Info().Msgf("%s", msgj)
 
 	return nil
 }
