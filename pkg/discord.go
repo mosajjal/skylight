@@ -25,27 +25,12 @@ func itemToEmbed(item *FeedNews) *discordgo.MessageEmbed {
 		log.Debug().Msgf("No image found for %s", item.Title)
 	}
 
-<<<<<<< HEAD
-	if item.Author != nil {
-		embed.Author = &discordgo.MessageEmbedAuthor{
-			Name: item.FeedName,
-		}
-	} else {
-		log.Debug().Msgf("No author found for %s", item.Title)
-	}
-
-	if item.PublishedParsed != nil {
-		embed.Timestamp = item.PublishedParsed.Format(time.RFC3339)
-	} else {
-		log.Debug().Msgf("No published date found for %s", item.Title)
-=======
 	embed.Author = &discordgo.MessageEmbedAuthor{
 		Name: item.FeedName,
 	}
 
 	if item.Date != time.Unix(0, 0) {
 		embed.Timestamp = item.Date.Format(time.RFC3339)
->>>>>>> 9c1f027aee5b5984395fa5220e5184d7fb8a44b8
 	}
 
 	return embed
@@ -90,12 +75,6 @@ func SendToWebhook(webhookURL string, item *FeedNews) error {
 	if err != nil {
 		return err
 	}
-<<<<<<< HEAD
-=======
-	if msg != nil {
-		log.Info().Msgf("%v", msg)
-	}
->>>>>>> 9c1f027aee5b5984395fa5220e5184d7fb8a44b8
 
 	return nil
 }
