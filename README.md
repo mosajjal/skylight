@@ -37,9 +37,7 @@ Options:
 
 Skylight uses a configuration file in HCL format. Below is an example 
 
-config.hcl
-
-:
+config.hcl:
 
 ```hcl
 log_level = "info"
