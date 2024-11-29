@@ -15,7 +15,7 @@ Skylight is a Go application that monitors RSS feeds and sends updates to Discor
 Ensure you have Go installed on your system. Then, download and build Skylight:
 
 ```bash
-git clone https://github.com/yourusername/skylight.git
+git clone https://github.com/mosajjal/skylight.git
 cd skylight
 go build -o skylight
 ```
