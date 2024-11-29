@@ -1,0 +1,28 @@
+log_level = "debug"
+state_file = "state.json"
+
+feed "Feed 1" {
+    # RSS URL
+    url = FEED1_URL
+    # how often to check for updates. in seconds
+    interval = 300
+    # how many items to keep in the feed
+    max_items = 10
+    # oldest item to keep in the feed (in hours). 0 to keep all items
+    ignore_items_older_than = 24
+    # where to send the notifications
+    webhook_url = REPLACE_WITH_YOUR_WEBHOOK_URL
+}
+
+feed "Feed 2" {
+    # RSS URL
+    url = FEED2_URL
+    # how often to check for updates. in seconds
+    interval = 300
+    # how many items to keep in the feed
+    max_items = 10
+    # oldest item to keep in the feed (in hours). 0 to keep all items
+    ignore_items_older_than = 24
+    # where to send the notifications
+    webhook_url = REPLACE_WITH_YOUR_WEBHOOK_URL
+}
